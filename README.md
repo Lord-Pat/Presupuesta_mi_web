@@ -2,8 +2,6 @@
 
 Aplicación para calcular presupuestos de proyectos web. Incluye un **frontend en Next.js y shadcn/ui** y una **API REST independiente en Node.js y Express**. La API valida los datos recibidos, aplica las tarifas definidas en el servidor y devuelve el presupuesto desglosado en euros.
 
-Proyecto realizado para la actividad **«Presupuesta mi web»**, módulo **0613 · Desarrollo web en entorno servidor**.
-
 ## Tecnologías
 
 | Parte | Tecnologías |
@@ -77,7 +75,7 @@ Abre `http://localhost:3000` en el navegador. **Deja ambas terminales abiertas.*
 
 Si modificas una variable `NEXT_PUBLIC_`, reinicia el servidor de desarrollo; para una compilación de producción deberás volver a compilar.
 
-Para ejecutar el frontend en modo producción local, desde `frontend`:
+Opcionalmente, para ejecutar el frontend en modo producción local, desde `frontend`:
 
 ```bash
 npm run build
@@ -160,7 +158,7 @@ Las pruebas se han realizado en **Postman**, verificando las rutas, los códigos
 | GET | `/api/estado` | HTTP 200 · `{"status":"ok"}` | Correcto · HTTP 200 |
 | GET | `/api/tarifas` | HTTP 200 · tarifas oficiales | Correcto · HTTP 200 |
 
-### 2. Nueve casos obligatorios del POST
+### 2. Casos de prueba del endpoint POST
 
 **Configuración común:** método `POST`, URL `http://localhost:3001/api/presupuesto`, cabecera `Content-Type: application/json` y cuerpo **raw JSON**.
 
@@ -188,7 +186,7 @@ En los casos inválidos, los demás campos se mantienen correctos para aislar ca
 | Segundo idioma | 0 € |
 | **Total** | **830 €** |
 
-**Resultado:** los nueve casos obligatorios se han superado correctamente.
+**Resultado:** los nueve casos de prueba se han superado correctamente.
 
 ## Integración del frontend con Express
 
@@ -241,12 +239,6 @@ Según las comprobaciones realizadas con Playwright/Chromium y el backend real:
 
 Para comprobar el error 400 en la interfaz se alteró únicamente la solicitud de prueba a `paginas: 0`; el mensaje procedió del validador real de Express. Además se simularon mediante respuestas controladas un estado inesperado y un HTTP 503 en tarifas. Estos últimos **no fueron respuestas reales del backend**. No se han comprobado otros navegadores.
 
-## Preparación de la entrega
-
-El repositorio debe incluir el código fuente, los archivos `package.json` y `package-lock.json` de **ambas aplicaciones**, `.env.example`, `.gitignore` y este `README.md`.
-
-**No subir:** `node_modules/`, `.next/`, `.env.local`, otros archivos `.env` con credenciales ni secretos. La configuración local se reproduce a partir de `.env.example`.
-
 ## Conclusión
 
-La API valida las entradas antes de calcular, mantiene las tarifas bajo control del servidor, devuelve los desgloses exigidos y permite reproducir las pruebas obligatorias. El frontend Next.js consume esta API para mostrar los precios, comprobar el estado del servicio y calcular presupuestos sin duplicar la lógica de negocio.
+La API valida las entradas antes de calcular, mantiene las tarifas bajo control del servidor, devuelve los desgloses exigidos y permite reproducir los casos de prueba. El frontend Next.js consume esta API para mostrar los precios, comprobar el estado del servicio y calcular presupuestos sin duplicar la lógica de negocio.
