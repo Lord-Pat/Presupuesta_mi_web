@@ -24,6 +24,7 @@ import {
 const links = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/presupuestos", label: "Presupuestos", icon: FileText },
+  { href: "/solicitud", label: "Solicitud", icon: FileText },
   { href: "/tarifas", label: "Tarifas", icon: Tags },
   { href: "/estado-api", label: "Estado API", icon: Server },
 ]

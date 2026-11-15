@@ -1,6 +1,14 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@source "../node_modules/onborda/dist";
+
+/* Onborda ilumina el título; la ayuda ocupa espacio y no captura el formulario. */
+[data-name="onborda-overlay"] { pointer-events: none; }
+.wizard-guide-card { position: relative; z-index: 1000; pointer-events: auto; }
+.wizard-stage { animation: wizard-entry 180ms ease-out; }
+@keyframes wizard-entry { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .wizard-stage { animation: none; } }
 
 @custom-variant dark (&:is(.dark *));
 
