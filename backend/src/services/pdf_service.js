@@ -17,9 +17,8 @@ function prepararDocumento(datos) {
   const presupuesto = calcularPresupuesto(configuracion);
   const campos = { [tipo]: "base", paginaAdicional: "paginasAdicionales", formulario: "formulario", segundoIdioma: "segundoIdioma" };
   return {
-    cliente: datos.solicitud.cliente.trim(), descripcion: datos.solicitud.descripcion.trim(),
-    resumen: datos.propuesta.resumen.trim(), aclaraciones: datos.aclaraciones,
-    necesidadesNoCubiertas: datos.propuesta.necesidadesNoCubiertas,
+    cliente: datos.solicitud.cliente.trim(),
+    resumen: datos.propuesta.resumen.trim(),
     configuracion, presupuesto,
     partidas: catalogo.servicios.filter(({ id }) => datos.serviciosSeleccionados.includes(id)).map((servicio) => ({
       id: servicio.id, nombre: servicio.nombre, descripcion: servicio.descripcion,
@@ -80,7 +79,8 @@ function generarPDF(datos) {
       cabecera();
       doc.font("Helvetica-Bold").fontSize(9).fillColor(color.blue).text("PREPARADO PARA", 48, doc.y);
       doc.y += 7;
-      doc.fontSize(19).fillColor(color.navy).text(seguro(modelo.cliente), 48, doc.y, { width: ancho }); doc.y += 18;
+      doc.fontSize(19).fillColor(color.navy).text(seguro(modelo.cliente), 48, doc.y, { width: ancho }); doc.y += 12;
+      body(); doc.text(`Configuración confirmada: ${modelo.configuracion.paginas} páginas en total. Primera página incluida.`, 48, doc.y, { width: ancho }); doc.y += 16;
       body();
       const resumen = seguro(modelo.resumen);
       const alto = doc.heightOfString(resumen, { width: ancho - 28, lineGap: 3 }) + 28;
@@ -97,37 +97,24 @@ function generarPDF(datos) {
       modelo.partidas.forEach((partida, indice) => {
         doc.font("Helvetica").fontSize(9.5);
         const descripcion = seguro(partida.descripcion);
-        const altoFila = doc.heightOfString(descripcion, { width: 220, lineGap: 2 }) + 44;
+        const altoFila = doc.heightOfString(descripcion, { width: 220, lineGap: 2 }) + 38;
         if (doc.y + altoFila > doc.page.height - 64) { doc.addPage(); titulo("Servicios incluidos · continuación"); tablaCabecera(); }
         const y = doc.y;
         doc.rect(48, y, ancho, altoFila).fill(indice % 2 === 0 ? color.pale : "#FAFBFD");
         doc.font("Helvetica-Bold").fontSize(10.5).fillColor(color.text).text(seguro(partida.nombre), 59, y + 12, { width: 220 });
-        doc.font("Helvetica").fontSize(9.5).fillColor(color.muted).text(descripcion, 59, y + 30, { width: 220, lineGap: 2 });
+        doc.font("Helvetica").fontSize(9.5).fillColor(color.muted).text(descripcion, 59, y + 27, { width: 220, lineGap: 2 });
         doc.fontSize(10).fillColor(color.text);
         doc.text(String(partida.cantidad), 290, y + 13, { width: 35, align: "center" });
         doc.text(euros(partida.precioUnitario), 334, y + 13, { width: 94, align: "right" });
         doc.font("Helvetica-Bold").text(euros(partida.importe), 438, y + 13, { width: 98, align: "right" });
         doc.y = y + altoFila; body();
       });
-      doc.y += 18; asegurar(100);
+      doc.y += 14; asegurar(94);
       const yTotal = doc.y;
       doc.roundedRect(48, yTotal, ancho, 82, 7).fill(color.navy);
       doc.font("Helvetica-Bold").fontSize(11).fillColor("white").text("TOTAL DE LOS SERVICIOS", 64, yTotal + 18, { width: 250 });
       doc.fontSize(25).text(euros(modelo.presupuesto.total), 330, yTotal + 14, { width: ancho - 298, align: "right" });
       doc.font("Helvetica").fontSize(9).fillColor("#D5E1F8").text("Impuestos no calculados · EUR", 64, yTotal + 53, { lineBreak: false });
-      doc.y = yTotal + 106;
-      titulo("Detalle de la solicitud"); parrafo(modelo.descripcion);
-      asegurar(100); titulo("Dudas y aclaraciones");
-      if (!modelo.aclaraciones.length) parrafo("No hay dudas adicionales registradas.");
-      modelo.aclaraciones.forEach((item, indice) => {
-        asegurar(65);
-        parrafo(`${indice + 1}. ${item.pregunta}`);
-        parrafo(item.respuesta.trim() ? `Aclaración del cliente: ${item.respuesta.trim()}` : "Pendiente de aclarar.");
-      });
-      titulo("Necesidades pendientes de valoración");
-      parrafo("Fuera del alcance y del total de los servicios incluidos:");
-      if (!modelo.necesidadesNoCubiertas.length) parrafo("No se han identificado necesidades fuera del catálogo.");
-      modelo.necesidadesNoCubiertas.forEach((texto, indice) => parrafo(`${indice + 1}. ${texto}`));
       const rango = doc.bufferedPageRange();
       for (let pagina = rango.start; pagina < rango.start + rango.count; pagina++) {
         doc.switchToPage(pagina);

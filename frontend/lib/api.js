@@ -263,6 +263,12 @@ export async function generateProposal(values, options) {
   const text = (value) => typeof value === "string" && value.trim().length > 0
   if (
     !text(data?.resumen) ||
+    !(
+      data.paginasDetectadas === null ||
+      (Number.isInteger(data.paginasDetectadas) &&
+        data.paginasDetectadas >= 1 &&
+        data.paginasDetectadas <= 20)
+    ) ||
     !Array.isArray(data.serviciosPropuestos) ||
     !data.serviciosPropuestos.every(
       (servicio) => text(servicio?.id) && text(servicio?.justificacion)

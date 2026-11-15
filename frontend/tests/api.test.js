@@ -92,6 +92,7 @@ test("descarta nombres de archivo inseguros proporcionados por el servidor", asy
 })
 
 const propuestaFicticia = {
+  paginasDetectadas: null,
   resumen: "Web informativa ficticia.",
   serviciosPropuestos: [
     { id: "landing", justificacion: "Una página para presentar el negocio." },
@@ -99,6 +100,20 @@ const propuestaFicticia = {
   dudas: [],
   necesidadesNoCubiertas: [],
 }
+
+test("acepta páginas detectadas válidas y rechaza valores fuera de contrato", async () => {
+  for (const paginasDetectadas of [null, 1, 5, 20]) {
+    reply({ ...propuestaFicticia, paginasDetectadas })
+    assert.equal(
+      (await generateProposal({})).paginasDetectadas,
+      paginasDetectadas
+    )
+  }
+  for (const paginasDetectadas of [undefined, "5", 0, 21, 2.5, false]) {
+    reply({ ...propuestaFicticia, paginasDetectadas })
+    await assert.rejects(generateProposal({}), { kind: "response" })
+  }
+})
 
 test("envía la solicitud validada para proponer servicios sin calcular precios", async () => {
   const solicitud = {

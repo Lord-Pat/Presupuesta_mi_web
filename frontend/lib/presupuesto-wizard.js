@@ -4,7 +4,12 @@ export function crearEstadoWizard(solicitud, propuesta) {
     solicitud,
     propuesta,
     seleccion: propuesta.serviciosPropuestos.map(({ id }) => id),
-    configuracion: { paginas: "" },
+    configuracion: {
+      paginas:
+        propuesta.paginasDetectadas == null
+          ? ""
+          : String(propuesta.paginasDetectadas),
+    },
     aclaraciones: propuesta.dudas.map((pregunta) => ({
       pregunta,
       respuesta: "",
@@ -12,6 +17,7 @@ export function crearEstadoWizard(solicitud, propuesta) {
     calculo: null,
     confirmado: null,
     paso: 0,
+    viendoPDF: false,
     revision: 0,
     error: null,
   }
@@ -36,17 +42,19 @@ export function validarSeleccion(seleccion, catalogo) {
 export function datosPresupuesto(estado, catalogo) {
   const error = validarSeleccion(estado.seleccion, catalogo)
   if (error) throw new Error(error)
-  const adicionales = estado.seleccion.includes("paginaAdicional")
-  const paginas = adicionales ? Number(estado.configuracion.paginas) : 1
+  const paginas = Number(estado.configuracion.paginas)
   if (
-    adicionales &&
-    (!String(estado.configuracion.paginas).trim() ||
-      !Number.isInteger(paginas) ||
-      paginas < 2 ||
-      paginas > 20)
+    !String(estado.configuracion.paginas).trim() ||
+    !Number.isInteger(paginas) ||
+    paginas < 1 ||
+    paginas > 20
   )
     throw new Error(
-      "Indica el número total de páginas: un entero entre 2 y 20 para incluir páginas adicionales. La primera ya está incluida."
+      "Indica el número total de páginas: un entero entre 1 y 20. La primera ya está incluida."
+    )
+  if (estado.seleccion.includes("paginaAdicional") !== paginas > 1)
+    throw new Error(
+      "Revisa la selección de páginas adicionales y el número total de páginas."
     )
   return {
     tipo: estado.seleccion.find((id) =>
@@ -79,6 +87,7 @@ export function wizardReducer(estado, accion) {
     calculo: null,
     confirmado: null,
     error: null,
+    viendoPDF: false,
   })
   switch (accion.type) {
     case "servicio": {
@@ -92,7 +101,7 @@ export function wizardReducer(estado, accion) {
         !estado.seleccion.some((actual) => bases.includes(actual))
       )
         return { ...estado, error: "Selecciona primero un servicio base." }
-      const seleccion = bases.includes(id)
+      let seleccion = bases.includes(id)
         ? activo
           ? []
           : [
@@ -102,26 +111,59 @@ export function wizardReducer(estado, accion) {
         : activo
           ? estado.seleccion.filter((actual) => actual !== id)
           : [...estado.seleccion, id]
-      return invalidar({ seleccion })
+      if (
+        bases.includes(id) &&
+        !activo &&
+        Number(estado.configuracion.paginas) > 1 &&
+        !seleccion.includes("paginaAdicional")
+      )
+        seleccion = [...seleccion, "paginaAdicional"]
+      const configuracion =
+        id === "paginaAdicional"
+          ? {
+              paginas: activo
+                ? "1"
+                : Number(estado.configuracion.paginas) > 1
+                  ? estado.configuracion.paginas
+                  : "",
+            }
+          : estado.configuracion
+      return invalidar({ seleccion, configuracion })
     }
     case "quitarTodos":
       return invalidar({ seleccion: [] })
-    case "paginas":
-      return invalidar({ configuracion: { paginas: accion.valor } })
+    case "paginas": {
+      const paginas = Number(accion.valor)
+      let seleccion = estado.seleccion
+      if (
+        String(accion.valor).trim() &&
+        Number.isInteger(paginas) &&
+        paginas >= 1 &&
+        paginas <= 20 &&
+        seleccion.some((id) => id === "landing" || id === "corporativa")
+      ) {
+        seleccion = seleccion.filter((id) => id !== "paginaAdicional")
+        if (paginas > 1) seleccion = [...seleccion, "paginaAdicional"]
+      }
+      return invalidar({ seleccion, configuracion: { paginas: accion.valor } })
+    }
     case "aclaracion":
       return {
         ...estado,
         confirmado: null,
+        viendoPDF: false,
         aclaraciones: estado.aclaraciones.map((item, indice) =>
           indice === accion.indice ? { ...item, respuesta: accion.valor } : item
         ),
       }
     case "paso":
-      return { ...estado, paso: accion.paso, error: null }
+      return { ...estado, paso: accion.paso, viendoPDF: false, error: null }
+    case "pdf":
+      return estado.confirmado ? { ...estado, viendoPDF: true } : estado
     case "error":
       return { ...estado, error: accion.error }
     case "iniciarCalculo":
-      return { ...estado, confirmado: null, error: null }
+      return { ...estado, confirmado: null, viendoPDF: false, error: null }
     case "calculo":
       if (accion.revision !== estado.revision) return estado
       return {

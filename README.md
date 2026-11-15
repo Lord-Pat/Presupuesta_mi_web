@@ -111,8 +111,12 @@ con Structured Outputs). Si ya tienes `backend/.env.local`, conserva su configur
 Nunca utilices `NEXT_PUBLIC_` para la clave. `.gitignore` excluye los archivos `.env*`,
 salvo las plantillas `.env.example` sin secretos. Reinicia Express al cambiar el entorno.
 
-En `/solicitud`, rellena el formulario y pulsa **Continuar**. Después puedes pulsar
-**Generar propuesta con IA**. La IA devuelve sugerencias: la revisión y confirmación
+En `/solicitud`, rellena el formulario y pulsa **Generar propuesta con IA** una sola
+vez. El frontend envía directamente a `/api/propuestas`; Express valida los datos
+antes de llamar a OpenAI. No hay validación ni confirmación intermedia visible.
+El resultado abre automáticamente la primera etapa de revisión. Si falla, se
+conservan los campos y el mismo botón permite reintentar, sin envíos duplicados.
+La IA devuelve sugerencias: la revisión y confirmación
 corresponden al usuario mediante el wizard descrito en el punto 4. La IA no calcula
 precios. Los datos y el resultado se conservan únicamente en el estado del frontend
 mientras la vista permanezca montada.
@@ -142,6 +146,7 @@ Ejemplo de respuesta ficticia:
 ```json
 {
   "resumen": "Web informativa para presentar un negocio.",
+  "paginasDetectadas": null,
   "serviciosPropuestos": [
     { "id": "corporativa", "justificacion": "Permite presentar el negocio y sus servicios." }
   ],
@@ -149,6 +154,15 @@ Ejemplo de respuesta ficticia:
   "necesidadesNoCubiertas": []
 }
 ```
+
+`paginasDetectadas` es obligatorio en la respuesta estructurada: un entero entre 1
+y 20, o `null`. El prompt reconoce cantidades explícitas en cifras o palabras, como
+«web de 5 páginas» o «cinco páginas», y distingue páginas independientes de secciones.
+Si faltan datos, hay ambigüedad, contradicciones o una cantidad fuera del intervalo,
+pide aclaraciones y devuelve `null`. No se deduce automáticamente una página de la
+palabra landing. Express rechaza tipos, intervalos y combinaciones incoherentes:
+con páginas adicionales hace falta una cantidad mayor que uno y, si existe una base
+con más de una página detectada, la propuesta debe incluir ese complemento.
 
 Los errores devuelven `{ "error": "Mensaje comprensible", "codigo": "CODIGO" }`;
 los errores de entrada también incluyen `errores` por campo. Se usan HTTP 400 para
@@ -167,22 +181,27 @@ y [modelo por defecto](https://developers.openai.com/api/docs/models/gpt-4.1-min
 
 ### Revisión y confirmación guiada (punto 4)
 
-Tras generar una propuesta, pulsa **Iniciar revisión guiada**. El wizard mantiene
-su propio paso y sus validaciones, independientemente del tour Onborda:
+La revisión se abre directamente después del análisis, sin otro clic. El wizard
+mantiene tres pasos y sus validaciones, independientemente del tour Onborda:
 
-1. Revisar el cliente, resumen, recomendaciones, justificaciones y necesidades no cubiertas.
-2. Elegir servicios del catálogo. Los interruptores añaden o eliminan servicios;
+1. Elegir servicios del catálogo, con los recomendados por OpenAI preseleccionados.
+   No hay una pantalla previa de sugerencias o justificaciones.
+   Los interruptores añaden o eliminan servicios;
    cambiar de base sustituye la anterior conservando los complementos y cantidades.
    Quitar la base elimina sus complementos; puedes volver a elegirlos sin perder
-   las cantidades y aclaraciones escritas. Sin base no se puede avanzar al cálculo.
-3. Configurar páginas y aclaraciones. Sin páginas adicionales, la selección incluye
-   únicamente la primera página de la base. Al activar páginas adicionales, se exige
-   el total entre 2 y 20, sin asignar automáticamente una cantidad. Las respuestas a
-   dudas son opcionales y no sustituyen las cantidades ni las opciones seleccionadas.
-4. Calcular con `POST /api/presupuesto`. Se envían exclusivamente `tipo`, `paginas`,
-   `formulario` y `segundoIdioma`. Se muestra el desglose y total que devuelve Express.
-5. Revisar y confirmar. La confirmación consulta otra vez a Express; si los importes
-   han cambiado, exige revisar el nuevo desglose y confirmar de nuevo.
+   las cantidades. Sin base no se puede avanzar al cálculo.
+2. Configurar páginas. La cantidad detectada se precarga una sola vez;
+   si es `null`, queda vacía y debe completarse con un entero entre 1 y 20. La edición
+   manual se conserva al retroceder y ajusta las páginas adicionales: una página no
+   lleva ese complemento, y más de una sí. Solo se solicita información necesaria
+   para el cálculo; las dudas de IA se conservan internamente, sin mostrarlas.
+3. **Revisar y confirmar presupuesto**. Al entrar se consulta automáticamente
+   `POST /api/presupuesto` con `tipo`, `paginas`, `formulario` y `segundoIdioma`.
+   Se muestra una tabla compacta con servicio, cantidad, importe y total del servidor;
+   sin explicaciones ni aclaraciones de IA. Las dos acciones principales son
+   **Modificar presupuesto** y **Confirmar y continuar**. Confirmar comprueba otra vez
+   los importes en Express y abre directamente el PDF; si han cambiado, pide revisar
+   el nuevo total en el mismo paso antes de confirmar. Un fallo permite reintentar.
 
 Cualquier cambio de servicios o páginas invalida el cálculo y la confirmación.
 Las respuestas de cálculos anteriores se descartan mediante una revisión de estado.
@@ -202,6 +221,8 @@ aclaraciones, cálculo de Express, confirmación y paso. Al confirmar, se entreg
 `useSolicitud.presupuestoConfirmado` una copia de esos datos: incluye IDs seleccionados,
 configuración, aclaraciones, dudas pendientes, necesidades fuera del catálogo y
 desglose económico. Este snapshot se utiliza para generar el PDF del punto 5.
+Las dudas y necesidades se mantienen en el contrato de datos por compatibilidad,
+pero no se muestran en el wizard ni se imprimen en el documento comercial.
 
 Las pruebas de estado están en `frontend/tests/presupuesto-wizard.test.js`. Las suites
 anteriores siguen ejecutándose con `npm test` en cada aplicación. La comprobación en
@@ -212,11 +233,14 @@ Referencia: [documentación de Onborda](https://www.onborda.dev/docs).
 
 ### Generación, revisión y descarga PDF (punto 5)
 
-Después de confirmar, el wizard permite avanzar a un sexto paso: **Revisar y
-descargar presupuesto**. La ayuda Onborda continúa sin reiniciar las etapas anteriores.
+**Confirmar y continuar** abre la vista previa PDF como continuación de la revisión,
+sin añadir otro paso ni una segunda pantalla de confirmación. Onborda muestra
+solo las tres etapas de revisión y se oculta durante la vista previa para no
+interferir con el visor. Al volver se mantienen los datos y el estado de la ayuda.
 
-1. Pulsa **Generar vista previa PDF**. Express valida el snapshot confirmado y vuelve
-   a calcular los importes utilizando `presupuesto_service.js`.
+1. El PDF se genera automáticamente. Express valida el snapshot confirmado y vuelve
+   a calcular los importes utilizando `presupuesto_service.js`. El botón de generación
+   queda disponible para reintentar si falla, sin repetir todo el recorrido.
 2. Revisa el PDF real en el visor integrado, o ábrelo en otra pestaña si el navegador
    no admite un visor PDF incrustado. Puedes cerrar y reabrir la vista previa.
 3. Pulsa **Aprobar documento** para confirmar explícitamente que lo has revisado.
@@ -230,8 +254,10 @@ Los servicios y descripciones proceden del catálogo. Las partidas y el total pr
 del cálculo centralizado, no de los importes enviados por el cliente. No se calculan
 impuestos ni se inventan datos fiscales, plazos o condiciones comerciales.
 
-El PDF incluye el resumen existente, detalle de la solicitud, dudas, respuestas y
-necesidades no cubiertas claramente separadas del alcance presupuestado. Los textos
+El PDF presenta únicamente cabecera, cliente y configuración confirmada, resumen
+del proyecto, tabla de servicios confirmados, total y pie de página. No incluye
+dudas, aclaraciones, sugerencias, justificaciones ni necesidades fuera del catálogo.
+Tampoco repite la descripción original como un apartado adicional. Los textos
 extensos tienen saltos de página, cabeceras repetidas y numeración. Se utilizan las
 fuentes estándar Helvetica, compatibles con español y euros; los símbolos que esas
 fuentes no representan se sustituyen por `?` para evitar texto PDF inválido.
@@ -264,7 +290,7 @@ backend. El valor local por defecto sigue siendo `http://localhost:3000` para CO
 No se ha publicado un despliegue durante esta implementación.
 
 Las pruebas PDF automatizadas están en `backend/tests/pdf.test.js`; cubren landing,
-extras, servicios eliminados, dudas pendientes, textos multipágina, validación,
+extras, servicios eliminados, exclusión de aclaraciones y necesidades, textos multipágina, validación,
 totales manipulados, errores y nombres de descarga. `frontend/tests/api.test.js`
 también cubre la respuesta binaria, archivos truncados y errores del endpoint.
 La QA en Chromium completo verificó visualmente el PDF nativo, comparó por SHA-256

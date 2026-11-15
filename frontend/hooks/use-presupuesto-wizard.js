@@ -32,18 +32,14 @@ export function usePresupuestoWizard({
   function ir(paso) {
     if (pending.current) return
     try {
-      if (paso > 1) {
+      if (paso > 0) {
         const error = validarSeleccion(estado.seleccion, catalogo)
         if (error) throw new Error(error)
       }
-      if (paso > 2) datosPresupuesto(estado, catalogo)
-      if (paso >= 4 && !calculoVigente(estado, catalogo))
-        throw new Error(
-          "Calcula el presupuesto con tu selección actual antes de continuar."
-        )
-      if (paso === 5 && !estado.confirmado)
-        throw new Error("Confirma el presupuesto antes de revisar el PDF.")
+      if (paso > 1) datosPresupuesto(estado, catalogo)
+      if (!Number.isInteger(paso) || paso < 0 || paso > 2) return
       dispatch({ type: "paso", paso })
+      if (paso === 2 && !calculoVigente(estado, catalogo)) void calcular()
     } catch (error) {
       dispatch({ type: "error", error: error.message })
     }
@@ -105,6 +101,7 @@ export function usePresupuestoWizard({
         })
         dispatch({ type: "confirmar", catalogo })
         onConfirmar(confirmado.confirmado)
+        dispatch({ type: "pdf" })
       }
     } catch (error) {
       if (!controller.signal.aborted)

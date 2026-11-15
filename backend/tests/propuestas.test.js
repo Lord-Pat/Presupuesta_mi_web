@@ -9,6 +9,7 @@ const { crearServicioOpenAI, ErrorPropuesta } = require("../src/services/openai_
 
 const solicitud = { cliente: "Restaurante ficticio", descripcion: "Web de restaurante con carta, formulario de solicitudes de reserva y contenido en castellano e inglés." };
 const propuesta = {
+  paginasDetectadas: null,
   resumen: "Web informativa para un restaurante con carta y contacto en dos idiomas.",
   serviciosPropuestos: [
     { id: "corporativa", justificacion: "Presenta el establecimiento y su carta." },
@@ -19,6 +20,34 @@ const propuesta = {
   necesidadesNoCubiertas: []
 };
 const env = { OPENAI_API_KEY: "clave-ficticia-pruebas", OPENAI_MODEL: "modelo-ficticio" };
+
+test("valida páginas detectadas y la coherencia con los servicios", async () => {
+  for (const paginasDetectadas of [undefined, "5", 0, 21, 1.5, false]) {
+    const data = { ...propuesta, paginasDetectadas };
+    assert.ok(validarPropuesta(data));
+    await assert.rejects(simular(async () => respuesta(data))(solicitud), { codigo: "RESPUESTA_INVALIDA" });
+  }
+  const conPaginas = { ...propuesta, paginasDetectadas: 5, serviciosPropuestos: [...propuesta.serviciosPropuestos, { id: "paginaAdicional", justificacion: "Se solicitan cinco páginas independientes." }] };
+  assert.equal(validarPropuesta(conPaginas), null);
+  assert.ok(validarPropuesta({ ...conPaginas, paginasDetectadas: null }));
+  assert.ok(validarPropuesta({ ...conPaginas, paginasDetectadas: 1 }));
+  assert.ok(validarPropuesta({ ...propuesta, paginasDetectadas: 5 }));
+  assert.equal(validarPropuesta({ ...propuesta, paginasDetectadas: 1 }), null);
+});
+
+test("el esquema y el prompt distinguen páginas explícitas de secciones", async () => {
+  const prompt = require("../src/prompts/propuesta_prompt");
+  const schema = require("../src/config/propuesta_schema");
+  assert.deepEqual(schema.properties.paginasDetectadas, { type: ["integer", "null"], minimum: 1, maximum: 20 });
+  assert.ok(schema.required.includes("paginasDetectadas"));
+  for (const descripcion of ["Quiero una página web moderna", "Quiero una landing con cinco secciones"]) {
+    const result = await simular(async (params) => {
+      assert.ok(params.instructions.includes(prompt));
+      return respuesta({ ...propuesta, paginasDetectadas: null });
+    })({ ...solicitud, descripcion });
+    assert.equal(result.paginasDetectadas, null);
+  }
+});
 const respuesta = (data = propuesta) => ({ status: "completed", output_text: JSON.stringify(data), output: [] });
 const simular = (create) => crearServicioOpenAI({ env, client: { responses: { create } } });
 const original = app.locals.generarPropuesta;
@@ -55,7 +84,7 @@ test("A: el endpoint entrega solo la propuesta validada para restaurante, formul
 });
 
 test("B: permite una solicitud ambigua con dudas y sin selección infundada", async () => {
-  const ambigua = { resumen: "Web para un negocio cuyo alcance debe aclararse.", serviciosPropuestos: [], dudas: ["¿Qué contenido y funcionalidades necesita?"], necesidadesNoCubiertas: [] };
+  const ambigua = { paginasDetectadas: null, resumen: "Web para un negocio cuyo alcance debe aclararse.", serviciosPropuestos: [], dudas: ["¿Qué contenido y funcionalidades necesita?"], necesidadesNoCubiertas: [] };
   app.locals.generarPropuesta = simular(async () => respuesta(ambigua));
   const result = await enviar({ cliente: "Negocio ficticio", descripcion: "Quiero una página web moderna para mi negocio." });
   assert.equal(result.status, 200);
@@ -63,7 +92,7 @@ test("B: permite una solicitud ambigua con dudas y sin selección infundada", as
 });
 
 test("C: permite señalar una tienda con pagos como necesidad fuera del catálogo", async () => {
-  const tienda = { resumen: "Solicitud de una tienda online con pagos mediante tarjeta.", serviciosPropuestos: [], dudas: [], necesidadesNoCubiertas: ["El comercio electrónico y los pagos requieren valoración adicional, fuera del catálogo."] };
+  const tienda = { paginasDetectadas: null, resumen: "Solicitud de una tienda online con pagos mediante tarjeta.", serviciosPropuestos: [], dudas: [], necesidadesNoCubiertas: ["El comercio electrónico y los pagos requieren valoración adicional, fuera del catálogo."] };
   app.locals.generarPropuesta = simular(async () => respuesta(tienda));
   const result = await enviar({ cliente: "Tienda ficticia", descripcion: "Necesito una tienda online con pagos mediante tarjeta." });
   assert.equal(result.status, 200);

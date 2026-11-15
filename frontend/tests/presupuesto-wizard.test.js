@@ -16,6 +16,7 @@ const solicitud = {
   descripcion: "Web informativa.",
 }
 const propuesta = {
+  paginasDetectadas: null,
   resumen: "Web ficticia con contacto.",
   serviciosPropuestos: [
     { id: "corporativa", justificacion: "Presenta la empresa." },
@@ -25,6 +26,8 @@ const propuesta = {
   necesidadesNoCubiertas: ["Reservas automáticas pendientes de valoración."],
 }
 const inicial = () => crearEstadoWizard(solicitud, propuesta)
+const calculable = () =>
+  wizardReducer(inicial(), { type: "paginas", valor: "1" })
 const servicio = (estado, id) =>
   wizardReducer(estado, { type: "servicio", id, catalogo })
 const calcular = (estado) =>
@@ -85,11 +88,11 @@ test("rechaza desconocidos, duplicados y dos bases", () => {
 
 test("valida las páginas adicionales sin elegir automáticamente una cantidad", () => {
   const estado = servicio(inicial(), "paginaAdicional")
-  for (const paginas of ["", " ", "0", "1", "1.5", "21", "abc"]) {
+  for (const paginas of ["", " ", "0", "1.5", "21", "abc"]) {
     assert.throws(
       () =>
         datosPresupuesto({ ...estado, configuracion: { paginas } }, catalogo),
-      /entero entre 2 y 20/
+      /entero entre 1 y 20/
     )
   }
   for (const paginas of ["2", "20"])
@@ -98,7 +101,10 @@ test("valida las páginas adicionales sin elegir automáticamente una cantidad",
         .paginas,
       Number(paginas)
     )
-  assert.equal(datosPresupuesto(inicial(), catalogo).paginas, 1)
+  assert.throws(
+    () => datosPresupuesto(inicial(), catalogo),
+    /entero entre 1 y 20/
+  )
 })
 
 test("conserva datos y aclaraciones al retroceder y permite dudas pendientes", () => {
@@ -107,15 +113,18 @@ test("conserva datos y aclaraciones al retroceder y permite dudas pendientes", (
     indice: 0,
     valor: "Carta e información ficticia",
   })
-  estado = wizardReducer(estado, { type: "paso", paso: 3 })
+  estado = wizardReducer(estado, { type: "paso", paso: 2 })
   estado = wizardReducer(estado, { type: "paso", paso: 0 })
   assert.equal(estado.aclaraciones[0].respuesta, "Carta e información ficticia")
   assert.deepEqual(estado.seleccion, inicial().seleccion)
-  assert.equal(datosPresupuesto(inicial(), catalogo).paginas, 1)
+  assert.throws(
+    () => datosPresupuesto(inicial(), catalogo),
+    /entero entre 1 y 20/
+  )
 })
 
 test("cada cambio económico invalida cálculo y confirmación; ignora respuestas antiguas", () => {
-  let estado = calcular(inicial())
+  let estado = calcular(calculable())
   assert.ok(calculoVigente(estado, catalogo))
   estado = wizardReducer(estado, { type: "confirmar", catalogo })
   assert.ok(estado.confirmado)
@@ -135,7 +144,7 @@ test("cada cambio económico invalida cálculo y confirmación; ignora respuesta
 })
 
 test("la confirmación conserva el total del servidor, sin recalcularlo, y deja un snapshot para PDF", () => {
-  const estado = wizardReducer(calcular(inicial()), {
+  const estado = wizardReducer(calcular(calculable()), {
     type: "confirmar",
     catalogo,
   })
@@ -163,4 +172,40 @@ test("una propuesta vacía permite comenzar y seleccionar una base manualmente",
     validarSeleccion(servicio(estado, "landing").seleccion, catalogo),
     null
   )
+})
+
+test("precarga cinco páginas y conserva la edición manual al retroceder", () => {
+  let estado = crearEstadoWizard(solicitud, {
+    ...propuesta,
+    paginasDetectadas: 5,
+    serviciosPropuestos: [
+      ...propuesta.serviciosPropuestos,
+      { id: "paginaAdicional", justificacion: "Cinco páginas solicitadas." },
+    ],
+  })
+  assert.equal(estado.configuracion.paginas, "5")
+  estado = wizardReducer(estado, { type: "paginas", valor: "4" })
+  estado = wizardReducer(estado, { type: "paso", paso: 0 })
+  estado = wizardReducer(estado, { type: "paso", paso: 1 })
+  assert.equal(estado.configuracion.paginas, "4")
+  assert.equal(datosPresupuesto(estado, catalogo).paginas, 4)
+  estado = wizardReducer(estado, { type: "paginas", valor: "1" })
+  assert.ok(!estado.seleccion.includes("paginaAdicional"))
+  assert.equal(datosPresupuesto(estado, catalogo).paginas, 1)
+  estado = wizardReducer(estado, { type: "paginas", valor: "3" })
+  assert.ok(estado.seleccion.includes("paginaAdicional"))
+})
+
+test("la continuación PDF exige confirmación y se invalida al editar", () => {
+  assert.equal(wizardReducer(inicial(), { type: "pdf" }).viendoPDF, false)
+  let estado = wizardReducer(calcular(calculable()), {
+    type: "confirmar",
+    catalogo,
+  })
+  estado = wizardReducer(estado, { type: "pdf" })
+  assert.equal(estado.viendoPDF, true)
+  estado = wizardReducer(estado, { type: "paginas", valor: "2" })
+  assert.equal(estado.viendoPDF, false)
+  assert.equal(estado.confirmado, null)
+  assert.equal(estado.calculo, null)
 })

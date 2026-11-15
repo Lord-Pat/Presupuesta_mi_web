@@ -13,8 +13,12 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { RequestError, RequestLoading } from "@/components/request-feedback"
 
-export function PresupuestoPDF({ confirmado, onModificar }) {
-  const pdf = usePresupuestoPDF(confirmado)
+export function PresupuestoPDF({
+  confirmado,
+  onModificar,
+  autoGenerar = false,
+}) {
+  const pdf = usePresupuestoPDF(confirmado, autoGenerar)
   const { archivo, vistaCargada, aprobado, setError } = pdf
   const [abierto, setAbierto] = useState(true)
   const visor = useRef(null)

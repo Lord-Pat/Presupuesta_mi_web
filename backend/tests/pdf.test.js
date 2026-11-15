@@ -52,6 +52,7 @@ test("PDF sencillo: landing, nombre con acentos y 300 euros sin aceptar el total
   assert.equal(buffer.subarray(0, 5).toString(), "%PDF-");
   assert.ok(buffer.toString("latin1").trimEnd().endsWith("%%EOF"));
   const texto = textoPDF(buffer);
+  assert.equal([...buffer.toString("latin1").matchAll(/\/Type \/Page\b/g)].length, 1);
   for (const esperado of ["Presupuesto web", "Restaurante Mediterráneo ficticio", "Landing page", "300,00 €", "Impuestos no calculados", "Documento informativo"]) assert.ok(texto.includes(esperado), esperado);
   assert.ok(!texto.includes("1,00 €"));
   assert.ok(!texto.includes("Web corporativa"));
@@ -62,6 +63,7 @@ test("PDF con extras: corporativa, tres páginas, formulario y segundo idioma su
   assert.deepEqual(modelo.presupuesto, { base: 600, paginasAdicionales: 100, formulario: 80, segundoIdioma: 150, total: 930, moneda: "EUR" });
   assert.equal(modelo.partidas.find((item) => item.id === "paginaAdicional").cantidad, 2);
   const archivo = await generarPDF(datos(true));
+  assert.equal([...archivo.buffer.toString("latin1").matchAll(/\/Type \/Page\b/g)].length, 1);
   const texto = textoPDF(archivo.buffer);
   for (const esperado of ["Web corporativa", "Página adicional", "Formulario de contacto", "Segundo idioma", "600,00 €", "100,00 €", "80,00 €", "150,00 €", "930,00 €"]) assert.ok(texto.includes(esperado), esperado);
 });
@@ -75,14 +77,19 @@ test("solo incluye servicios finalmente seleccionados", async () => {
   assert.ok(textoPDF(archivo.buffer).includes("850,00 €"));
 });
 
-test("incluye dudas pendientes, respuestas y necesidades no presupuestadas", async () => {
+test("conserva compatibilidad de los datos pero excluye dudas, respuestas y necesidades del PDF", async () => {
   const pendientes = datos();
   pendientes.propuesta.dudas = ["¿Qué contenido tendrá?", "¿Qué material falta?"];
   pendientes.aclaraciones = [{ pregunta: pendientes.propuesta.dudas[0], respuesta: "Carta y presentación." }, { pregunta: pendientes.propuesta.dudas[1], respuesta: "" }];
   pendientes.propuesta.necesidadesNoCubiertas = ["Reservas automáticas pendientes de valoración."];
+  pendientes.solicitud.descripcion = "Descripción original extensa que no debe duplicarse en el documento.";
+  pendientes.propuesta.serviciosPropuestos = [{ id: "landing", justificacion: "Justificación interna que no debe imprimirse." }];
   assert.equal(validarDatosPDF(pendientes), null);
   const texto = textoPDF((await generarPDF(pendientes)).buffer);
-  for (const esperado of ["Carta y presentación.", "Pendiente de aclarar.", "Reservas automáticas", "Fuera del alcance"]) assert.ok(texto.includes(esperado), esperado);
+  for (const excluido of ["Dudas y aclaraciones", "Carta y presentación.", "Pendiente de aclarar.", "Reservas automáticas", "Fuera del alcance", "Necesidades pendientes", "¿Qué contenido tendrá?", "¿Qué material falta?", "Justificación interna", "Sugerencia", "Detalle de la solicitud", "Descripción original extensa"]) assert.ok(!texto.includes(excluido), excluido);
+  assert.ok(texto.includes("Resumen del proyecto"));
+  assert.ok(texto.includes(pendientes.propuesta.resumen));
+  assert.ok(texto.includes("300,00 €"));
 });
 
 test("texto extenso genera varias páginas A4 con cabeceras y numeración", async () => {

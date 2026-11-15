@@ -4,9 +4,10 @@ const catalogo = require("./catalogo");
 module.exports = {
   type: "object",
   additionalProperties: false,
-  required: ["resumen", "serviciosPropuestos", "dudas", "necesidadesNoCubiertas"],
+  required: ["resumen", "paginasDetectadas", "serviciosPropuestos", "dudas", "necesidadesNoCubiertas"],
   properties: {
     resumen: { type: "string" },
+    paginasDetectadas: { type: ["integer", "null"], minimum: 1, maximum: 20 },
     serviciosPropuestos: {
       type: "array",
       items: {

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import { generateBudgetPdf } from "@/lib/api"
 
-export function usePresupuestoPDF(confirmado) {
+export function usePresupuestoPDF(confirmado, autoGenerar = false) {
   const [archivo, setArchivo] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
@@ -19,7 +19,7 @@ export function usePresupuestoPDF(confirmado) {
     [confirmado]
   )
 
-  async function generar() {
+  const generar = useCallback(async () => {
     if (pending.current || confirmado?.estado !== "confirmado") return
     const controller = new AbortController()
     pending.current = controller
@@ -46,7 +46,12 @@ export function usePresupuestoPDF(confirmado) {
         setLoading(false)
       }
     }
-  }
+  }, [confirmado])
+  useEffect(() => {
+    if (!autoGenerar) return
+    const timer = setTimeout(generar, 0)
+    return () => clearTimeout(timer)
+  }, [autoGenerar, generar])
 
   function aprobar() {
     if (archivo) {

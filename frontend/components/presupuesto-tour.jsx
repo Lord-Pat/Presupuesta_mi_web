@@ -8,20 +8,14 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 
 export const etapas = [
-  "Revisar propuesta",
-  "Elegir servicios",
+  "Seleccionar servicios",
   "Configurar proyecto",
-  "Calcular presupuesto",
-  "Confirmar selección",
-  "Revisar y descargar presupuesto",
+  "Revisar y confirmar presupuesto",
 ]
 const explicaciones = [
-  "Revisa las sugerencias de IA. Las necesidades fuera del catálogo no se incluyen en el presupuesto.",
   "Elige una base y activa los complementos que necesites. Puedes cambiar de base conservando los demás ajustes.",
-  "Completa las páginas adicionales y responde las dudas que puedas. Puedes dejar pendientes las aclaraciones que no afecten al cálculo.",
-  "Solicita el cálculo a Express. Todos los importes que ves proceden del servidor.",
-  "Revisa el resultado final. Al confirmar volveremos a comprobar el cálculo con Express.",
-  "Genera el PDF y revisa todas sus páginas. Aprueba el documento para descargar ese mismo archivo. Si modificas los servicios, tendrás que generar y aprobar uno nuevo.",
+  "Revisa el número total de páginas detectado y ajusta la cantidad si lo necesitas. La primera página está incluida en el servicio base.",
+  "Revisa los importes calculados por Express. Puedes modificar el presupuesto o confirmar y continuar directamente a la vista previa del PDF.",
 ]
 const tours = etapas.map((titulo, indice) => ({
   tour: `presupuesto-${indice}`,
@@ -73,11 +67,7 @@ function TarjetaGuia({ step }) {
           {guia.paso < etapas.length - 1 && (
             <Button
               type="button"
-              disabled={
-                guia.loading ||
-                (guia.paso === 3 && !guia.vigente) ||
-                (guia.paso === 4 && !guia.confirmado)
-              }
+              disabled={guia.loading}
               onClick={guia.siguiente}
             >
               Siguiente
@@ -93,15 +83,7 @@ function TarjetaGuia({ step }) {
   )
 }
 
-function GuiaActiva({
-  paso,
-  activo,
-  loading,
-  vigente,
-  confirmado,
-  ir,
-  children,
-}) {
+function GuiaActiva({ paso, activo, loading, ir, children }) {
   const reducirMovimiento = useReducedMotion()
   const [mostrar, setMostrar] = useState(true)
   const { startOnborda, closeOnborda } = useOnborda()
@@ -123,8 +105,6 @@ function GuiaActiva({
       value={{
         paso,
         loading,
-        vigente,
-        confirmado,
         anterior: () => ir(paso - 1),
         siguiente: () => ir(paso + 1),
         cerrar: () => setMostrar(false),
@@ -140,13 +120,15 @@ function GuiaActiva({
           ease: "easeOut",
         }}
       >
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => setMostrar((actual) => !actual)}
-        >
-          {mostrar ? "Ocultar ayuda" : "Mostrar guía"}
-        </Button>
+        {activo && (
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => setMostrar((actual) => !actual)}
+          >
+            {mostrar ? "Ocultar ayuda" : "Mostrar guía"}
+          </Button>
+        )}
         {children}
       </Onborda>
     </GuiaContext.Provider>

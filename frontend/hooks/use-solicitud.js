@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { validateRequest, generateProposal } from "@/lib/api"
+import { generateProposal } from "@/lib/api"
 
 export function useSolicitud() {
   const [values, setValues] = useState({ cliente: "", descripcion: "" })
@@ -10,7 +10,6 @@ export function useSolicitud() {
   const [loading, setLoading] = useState(false)
   const [solicitud, setSolicitud] = useState(null)
   const [propuesta, setPropuesta] = useState(null)
-  const [analizando, setAnalizando] = useState(false)
   const [presupuestoConfirmado, setPresupuestoConfirmado] = useState(null)
   const pending = useRef(null)
 
@@ -56,16 +55,19 @@ export function useSolicitud() {
     pending.current = controller
     setLoading(true)
     try {
-      const data = await validateRequest(
-        {
-          cliente: values.cliente.trim(),
-          descripcion: values.descripcion.trim(),
-        },
-        { signal: controller.signal }
-      )
+      const solicitudActual = {
+        cliente: values.cliente.trim(),
+        descripcion: values.descripcion.trim(),
+      }
+      // /api/propuestas ya valida en Express antes de llamar a OpenAI.
+      const data = await generateProposal(solicitudActual, {
+        signal: controller.signal,
+      })
       if (!controller.signal.aborted) {
-        setSolicitud(data.solicitud)
-        setValues(data.solicitud)
+        setSolicitud(solicitudActual)
+        setValues(solicitudActual)
+        setPropuesta(data)
+        return data
       }
     } catch (failure) {
       if (!controller.signal.aborted) {
@@ -80,40 +82,15 @@ export function useSolicitud() {
     }
   }
 
-  async function analizar() {
-    if (!solicitud || pending.current) return
-    const controller = new AbortController()
-    pending.current = controller
-    setAnalizando(true)
-    setError(null)
-    setPropuesta(null)
-    setPresupuestoConfirmado(null)
-    try {
-      const data = await generateProposal(solicitud, {
-        signal: controller.signal,
-      })
-      if (!controller.signal.aborted) setPropuesta(data)
-    } catch (failure) {
-      if (!controller.signal.aborted) setError(failure.message)
-    } finally {
-      if (pending.current === controller) {
-        pending.current = null
-        setAnalizando(false)
-      }
-    }
-  }
-
   return {
     values,
     errors,
     error,
-    loading: loading || analizando,
-    analizando,
+    loading,
     solicitud,
     propuesta,
     change,
     submit,
-    analizar,
     presupuestoConfirmado,
     setPresupuestoConfirmado,
   }

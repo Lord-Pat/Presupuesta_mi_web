@@ -16,53 +16,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
-import { QuoteSummary } from "@/components/quote-summary"
+import { PresupuestoResumenCompacto } from "@/components/presupuesto-resumen-compacto"
 import { RequestError, RequestLoading } from "@/components/request-feedback"
 import { PresupuestoPDF } from "@/components/presupuesto-pdf"
-
-function Aclaraciones({ estado }) {
-  return (
-    <div className="flex flex-col gap-4">
-      <section>
-        <h3 className="mb-2 font-medium">Dudas y aclaraciones</h3>
-        {estado.aclaraciones.length ? (
-          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
-            {estado.aclaraciones.map(({ pregunta, respuesta }, indice) => (
-              <li key={indice}>
-                {pregunta}
-                <p className="mt-1 text-muted-foreground">
-                  {respuesta.trim() || "Pendiente de aclarar"}
-                </p>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="text-sm text-muted-foreground">
-            Sin dudas adicionales.
-          </p>
-        )}
-      </section>
-      <Alert>
-        <AlertTitle>Necesidades fuera del catálogo</AlertTitle>
-        <AlertDescription>
-          {estado.propuesta.necesidadesNoCubiertas.length ? (
-            <ul className="flex list-disc flex-col gap-2 pl-4">
-              {estado.propuesta.necesidadesNoCubiertas.map((texto, indice) => (
-                <li key={indice}>{texto}</li>
-              ))}
-            </ul>
-          ) : (
-            "No se han identificado necesidades no cubiertas."
-          )}
-          <p className="mt-2">
-            Estas necesidades no forman parte de los servicios presupuestados.
-          </p>
-        </AlertDescription>
-      </Alert>
-    </div>
-  )
-}
 
 function Flujo({
   catalogo,
@@ -77,7 +33,7 @@ function Flujo({
   const titulo = useRef(null)
   useEffect(() => {
     if (activo) titulo.current?.focus({ preventScroll: true })
-  }, [estado.paso, activo])
+  }, [estado.paso, estado.viendoPDF, activo])
   const base = catalogo.servicios.find(
     (servicio) =>
       estado.seleccion.includes(servicio.id) && servicio.categoria === "base"
@@ -86,42 +42,48 @@ function Flujo({
     <div className="max-w-3xl" hidden={!activo}>
       <PresupuestoTour
         paso={estado.paso}
-        activo={activo}
+        activo={activo && !estado.viendoPDF}
         loading={loading}
-        vigente={vigente}
-        confirmado={Boolean(estado.confirmado)}
         ir={ir}
       >
         <div className="mt-4 flex flex-col gap-5">
-          <nav aria-label="Progreso del presupuesto">
-            <ol className="grid grid-cols-6 gap-2">
-              {etapas.map((etapa, indice) => (
-                <li key={etapa}>
-                  <button
-                    type="button"
-                    onClick={() => ir(indice)}
-                    disabled={indice > estado.paso || loading}
-                    aria-current={indice === estado.paso ? "step" : undefined}
-                    aria-label={`Paso ${indice + 1}: ${etapa}`}
-                    className="flex w-full flex-col items-center gap-2 rounded-lg border p-2 text-center text-xs disabled:opacity-50 aria-current:border-primary aria-current:bg-accent"
-                  >
-                    <span className="font-semibold">{indice + 1}</span>
-                    <span className="hidden sm:inline">{etapa}</span>
-                  </button>
-                </li>
-              ))}
-            </ol>
-          </nav>
+          {!estado.viendoPDF && (
+            <nav aria-label="Progreso del presupuesto">
+              <ol className="grid grid-cols-3 gap-2">
+                {etapas.map((etapa, indice) => (
+                  <li key={etapa}>
+                    <button
+                      type="button"
+                      onClick={() => ir(indice)}
+                      disabled={indice > estado.paso || loading}
+                      aria-current={indice === estado.paso ? "step" : undefined}
+                      data-active={indice === estado.paso}
+                      aria-label={`Paso ${indice + 1}: ${etapa}`}
+                      className="flex w-full flex-col items-center gap-2 rounded-lg border p-2 text-center text-xs disabled:opacity-50 data-[active=true]:border-primary data-[active=true]:bg-accent data-[active=true]:text-primary"
+                    >
+                      <span className="font-semibold">{indice + 1}</span>
+                      <span className="hidden sm:inline">{etapa}</span>
+                    </button>
+                  </li>
+                ))}
+              </ol>
+            </nav>
+          )}
           <div id="wizard-stage-title" className="rounded-lg bg-card p-3">
             <p className="mb-1 text-xs text-muted-foreground">
-              Paso {estado.paso + 1} de {etapas.length} · {solicitud.cliente}
+              {estado.viendoPDF
+                ? "Documento"
+                : `Paso ${estado.paso + 1} de ${etapas.length}`}{" "}
+              · {solicitud.cliente}
             </p>
             <h2
               ref={titulo}
               tabIndex={-1}
               className="text-xl font-semibold outline-none"
             >
-              {etapas[estado.paso]}
+              {estado.viendoPDF
+                ? "Vista previa del presupuesto"
+                : etapas[estado.paso]}
             </h2>
           </div>
           <div id="wizard-guide-slot" />
@@ -131,61 +93,6 @@ function Flujo({
             aria-busy={loading}
           >
             {estado.paso === 0 && (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Resumen del proyecto</CardTitle>
-                    <CardDescription>
-                      Las recomendaciones son sugerencias pendientes de tu
-                      decisión.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p className="text-sm leading-6">{propuesta.resumen}</p>
-                  </CardContent>
-                </Card>
-                {propuesta.serviciosPropuestos.length ? (
-                  propuesta.serviciosPropuestos.map((sugerencia) => {
-                    const servicio = catalogo.servicios.find(
-                      ({ id }) => id === sugerencia.id
-                    )
-                    return (
-                      <Card key={sugerencia.id}>
-                        <CardHeader>
-                          <Badge variant="secondary">Sugerencia de IA</Badge>
-                          <CardTitle>
-                            {servicio?.nombre ?? sugerencia.id}
-                          </CardTitle>
-                          <CardDescription>
-                            {servicio?.descripcion}
-                          </CardDescription>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-sm leading-6">
-                            <span className="font-medium">
-                              Por qué se recomienda:{" "}
-                            </span>
-                            {sugerencia.justificacion}
-                          </p>
-                        </CardContent>
-                      </Card>
-                    )
-                  })
-                ) : (
-                  <Alert>
-                    <AlertTitle>
-                      La propuesta no recomienda servicios
-                    </AlertTitle>
-                    <AlertDescription>
-                      Puedes consultar el catálogo y elegir una base en el
-                      siguiente paso.
-                    </AlertDescription>
-                  </Alert>
-                )}
-                <Aclaraciones estado={estado} />
-              </>
-            )}
-            {estado.paso === 1 && (
               <>
                 <p className="text-sm text-muted-foreground">
                   Selecciona una única base y los complementos que quieras
@@ -248,218 +155,123 @@ function Flujo({
                 </Button>
               </>
             )}
-            {estado.paso === 2 && (
+            {estado.paso === 1 && (
               <Card>
                 <CardHeader>
-                  <CardTitle>Páginas y aclaraciones</CardTitle>
+                  <CardTitle>Páginas del proyecto</CardTitle>
                   <CardDescription>
                     La primera página está incluida en el precio base. Solo las
                     páginas posteriores son adicionales.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-6">
-                  {estado.seleccion.includes("paginaAdicional") ? (
-                    <div className="flex flex-col gap-2">
-                      <label htmlFor="wizard-paginas" className="field-label">
-                        Número total de páginas
-                      </label>
-                      <Input
-                        id="wizard-paginas"
-                        type="number"
-                        min={2}
-                        max={20}
-                        step={1}
-                        required
-                        value={estado.configuracion.paginas}
-                        disabled={loading}
-                        onChange={(event) =>
-                          cambiar({
-                            type: "paginas",
-                            valor: event.target.value,
-                          })
-                        }
-                        aria-describedby="wizard-paginas-help wizard-error"
-                        aria-invalid={Boolean(estado.error)}
-                      />
-                      <p
-                        id="wizard-paginas-help"
-                        className="text-xs text-muted-foreground"
-                      >
-                        Indica un entero entre 2 y 20. No asumimos cuántas
-                        páginas necesitas.
-                      </p>
-                    </div>
-                  ) : (
-                    <Alert>
-                      <AlertTitle>Una página incluida</AlertTitle>
-                      <AlertDescription>
-                        Tu selección no incluye páginas adicionales. Si
-                        necesitas más de una página, vuelve a «Elegir servicios»
-                        y actívalas.
-                      </AlertDescription>
-                    </Alert>
-                  )}
-                  {estado.aclaraciones.map(
-                    ({ pregunta, respuesta }, indice) => (
-                      <div key={indice} className="flex flex-col gap-2">
-                        <label
-                          htmlFor={`duda-${indice}`}
-                          className="field-label"
-                        >
-                          {pregunta}
-                        </label>
-                        <Input
-                          id={`duda-${indice}`}
-                          value={respuesta}
-                          maxLength={1000}
-                          placeholder="Opcional · puede quedar pendiente"
-                          disabled={loading}
-                          onChange={(event) =>
-                            cambiar({
-                              type: "aclaracion",
-                              indice,
-                              valor: event.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    )
-                  )}
-                  <p className="text-xs leading-5 text-muted-foreground">
-                    Las respuestas son aclaraciones: las páginas y los servicios
-                    que has seleccionado determinan el cálculo. Puedes dejar
-                    pendientes las demás dudas.
-                  </p>
+                  <div className="flex flex-col gap-2">
+                    <label htmlFor="wizard-paginas" className="field-label">
+                      Número total de páginas
+                    </label>
+                    <Input
+                      id="wizard-paginas"
+                      type="number"
+                      min={1}
+                      max={20}
+                      step={1}
+                      required
+                      value={estado.configuracion.paginas}
+                      disabled={loading}
+                      onChange={(event) =>
+                        cambiar({ type: "paginas", valor: event.target.value })
+                      }
+                      aria-describedby="wizard-paginas-help wizard-error"
+                      aria-invalid={Boolean(estado.error)}
+                    />
+                    <p
+                      id="wizard-paginas-help"
+                      className="text-xs text-muted-foreground"
+                    >
+                      {propuesta.paginasDetectadas != null
+                        ? `La IA detectó ${propuesta.paginasDetectadas} páginas. Puedes modificar el total.`
+                        : "No se ha podido determinar el total. Indica entre 1 y 20 páginas."}{" "}
+                      La primera está incluida; las adicionales se ajustan a
+                      esta cantidad.
+                    </p>
+                  </div>
                 </CardContent>
               </Card>
             )}
-            {estado.paso === 3 && (
+            {estado.paso === 2 && !estado.viendoPDF && (
               <>
-                <p className="text-sm">
-                  Servicio base: <strong>{base?.nombre}</strong>. Total de
-                  páginas:{" "}
-                  {estado.seleccion.includes("paginaAdicional")
-                    ? estado.configuracion.paginas
-                    : 1}
-                  .
-                </p>
-                <Button
-                  type="button"
-                  disabled={loading}
-                  onClick={() => calcular()}
-                >
-                  {loading
-                    ? "Calculando presupuesto..."
-                    : vigente
-                      ? "Recalcular presupuesto"
-                      : "Calcular presupuesto"}
-                </Button>
-                <QuoteSummary
-                  result={vigente ? estado.calculo.resultado : null}
+                <PresupuestoResumenCompacto
+                  estado={estado}
+                  catalogo={catalogo}
+                  vigente={vigente}
                   loading={loading}
                 />
-              </>
-            )}
-            {estado.paso === 4 && (
-              <>
-                <Card>
-                  <CardHeader>
-                    <CardTitle>{solicitud.cliente}</CardTitle>
-                    <CardDescription>{propuesta.resumen}</CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex flex-col gap-4">
-                    <h3 className="font-medium">
-                      Servicios finalmente seleccionados
-                    </h3>
-                    <ul className="flex list-disc flex-col gap-2 pl-5 text-sm">
-                      {estado.seleccion.map((id) => (
-                        <li key={id}>
-                          {
-                            catalogo.servicios.find(
-                              (servicio) => servicio.id === id
-                            )?.nombre
-                          }
-                        </li>
-                      ))}
-                    </ul>
-                    <p className="text-sm">
-                      {estado.calculo?.datos.paginas} páginas en total · Primera
-                      página incluida ·{" "}
-                      {Math.max(0, (estado.calculo?.datos.paginas ?? 1) - 1)}{" "}
-                      páginas adicionales.
-                    </p>
-                  </CardContent>
-                </Card>
-                <QuoteSummary
-                  result={vigente ? estado.calculo.resultado : null}
-                  loading={loading}
-                />
-                <Aclaraciones estado={estado} />
-                {estado.confirmado && (
-                  <Alert role="status">
-                    <AlertTitle>Presupuesto confirmado</AlertTitle>
-                    <AlertDescription>
-                      Tu selección y el desglose validado están preparados para
-                      revisar y generar el documento PDF en el siguiente paso.
-                    </AlertDescription>
-                  </Alert>
-                )}
                 <div className="flex flex-col gap-3 sm:flex-row">
                   <Button
                     type="button"
                     variant="outline"
                     disabled={loading}
-                    onClick={() => ir(1)}
+                    onClick={() => ir(0)}
                   >
-                    Modificar selección
+                    Modificar presupuesto
                   </Button>
                   <Button
                     type="button"
-                    disabled={loading || !vigente || Boolean(estado.confirmado)}
+                    disabled={loading || !vigente}
                     onClick={() => calcular(true)}
                   >
                     {loading
                       ? "Comprobando presupuesto..."
-                      : estado.confirmado
-                        ? "Confirmado"
-                        : "Confirmar presupuesto"}
+                      : "Confirmar y continuar"}
                   </Button>
                 </div>
               </>
             )}
-            {estado.paso === 5 && estado.confirmado && (
+            {estado.viendoPDF && estado.confirmado && (
               <PresupuestoPDF
+                autoGenerar
                 confirmado={estado.confirmado}
-                onModificar={() => ir(1)}
+                onModificar={() => ir(0)}
               />
             )}
             <div id="wizard-error">
-              {estado.error && <RequestError message={estado.error} />}
+              {estado.error && (
+                <RequestError
+                  message={estado.error}
+                  retry={
+                    estado.paso === 2 && !estado.viendoPDF
+                      ? () => calcular()
+                      : undefined
+                  }
+                />
+              )}
             </div>
           </div>
-          <div className="flex flex-wrap justify-between gap-3 border-t pt-5">
-            <Button
-              type="button"
-              variant="outline"
-              disabled={loading || estado.paso === 0}
-              onClick={() => ir(estado.paso - 1)}
-            >
-              Anterior
+          {estado.viendoPDF ? (
+            <Button type="button" variant="outline" onClick={() => ir(2)}>
+              Volver al presupuesto
             </Button>
-            {estado.paso < etapas.length - 1 && (
-              <Button
-                type="button"
-                disabled={
-                  loading ||
-                  (estado.paso === 3 && !vigente) ||
-                  (estado.paso === 4 && !estado.confirmado)
-                }
-                onClick={() => ir(estado.paso + 1)}
-              >
-                Siguiente
-              </Button>
-            )}
-          </div>
+          ) : (
+            estado.paso < 2 && (
+              <div className="flex flex-wrap justify-between gap-3 border-t pt-5">
+                <Button
+                  type="button"
+                  variant="outline"
+                  disabled={loading || estado.paso === 0}
+                  onClick={() => ir(estado.paso - 1)}
+                >
+                  Anterior
+                </Button>
+                <Button
+                  type="button"
+                  disabled={loading}
+                  onClick={() => ir(estado.paso + 1)}
+                >
+                  Siguiente
+                </Button>
+              </div>
+            )
+          )}
           <Button
             type="button"
             variant="ghost"

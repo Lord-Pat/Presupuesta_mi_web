@@ -9,8 +9,10 @@ const textoValido = (valor, limite) => typeof valor === "string" &&
   valor.trim().length > 0 && valor.length <= limite && !datosProhibidos.test(valor);
 
 function validarPropuesta(propuesta) {
-  if (!clavesExactas(propuesta, ["resumen", "serviciosPropuestos", "dudas", "necesidadesNoCubiertas"]) ||
+  if (!clavesExactas(propuesta, ["resumen", "paginasDetectadas", "serviciosPropuestos", "dudas", "necesidadesNoCubiertas"]) ||
       !textoValido(propuesta.resumen, 1500)) return "Estructura o resumen inválido";
+  const paginas = propuesta.paginasDetectadas;
+  if (paginas !== null && (!Number.isInteger(paginas) || paginas < 1 || paginas > 20)) return "Número de páginas detectado inválido";
 
   if (!Array.isArray(propuesta.serviciosPropuestos) ||
       propuesta.serviciosPropuestos.length > catalogo.servicios.length) return "Lista de servicios inválida";
@@ -26,6 +28,8 @@ function validarPropuesta(propuesta) {
   }
   const bases = catalogo.reglas.serviciosBase.filter((id) => ids.has(id));
   if (bases.length > 1 || (ids.size > 0 && bases.length !== 1)) return "Selección de base incompatible";
+  if (ids.has("paginaAdicional") && (paginas === null || paginas < 2)) return "Páginas adicionales sin una cantidad válida";
+  if (bases.length && paginas > 1 && !ids.has("paginaAdicional")) return "Faltan las páginas adicionales indicadas en la propuesta";
 
   for (const campo of ["dudas", "necesidadesNoCubiertas"]) {
     if (!Array.isArray(propuesta[campo]) || propuesta[campo].length > 20 ||

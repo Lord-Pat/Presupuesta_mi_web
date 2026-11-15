@@ -1,6 +1,6 @@
 "use client"
 
-import { LoaderCircle, CheckCircle } from "lucide-react"
+import { LoaderCircle } from "lucide-react"
 import { useState } from "react"
 import dynamic from "next/dynamic"
 import { useSolicitud } from "@/hooks/use-solicitud"
@@ -13,7 +13,6 @@ import {
 } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { RequestError } from "@/components/request-feedback"
 const PresupuestoWizard = dynamic(
   () => import("@/components/presupuesto-wizard"),
@@ -26,15 +25,17 @@ export function SolicitudForm() {
     errors,
     error,
     loading,
-    analizando,
     solicitud,
     propuesta,
     change,
     submit,
-    analizar,
     setPresupuestoConfirmado,
   } = useSolicitud()
   const [revisando, setRevisando] = useState(false)
+  async function generar(event) {
+    const resultado = await submit(event)
+    if (resultado) setRevisando(true)
+  }
   return (
     <div className="flex flex-col gap-6">
       <Card
@@ -50,7 +51,7 @@ export function SolicitudForm() {
         </CardHeader>
         <CardContent>
           <form
-            onSubmit={submit}
+            onSubmit={generar}
             noValidate
             aria-busy={loading}
             className="flex flex-col gap-6"
@@ -123,55 +124,23 @@ export function SolicitudForm() {
               </p>
             </div>
             {error && <RequestError message={error} />}
-            {solicitud && (
-              <Alert role="status">
-                <CheckCircle />
-                <AlertTitle>Solicitud validada correctamente</AlertTitle>
-                <AlertDescription>
-                  {solicitud.cliente}, los datos de tu proyecto están preparados
-                  para el siguiente paso.
-                </AlertDescription>
-              </Alert>
-            )}
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <Button
-                type="submit"
-                disabled={loading}
-                variant={solicitud ? "outline" : "default"}
-                className="h-11 w-full sm:w-auto"
-              >
-                {loading && !analizando && (
-                  <LoaderCircle
-                    data-icon="inline-start"
-                    className="animate-spin"
-                  />
-                )}
-                {loading && !analizando
-                  ? "Validando solicitud..."
-                  : "Continuar"}
-              </Button>
-              {solicitud && (
-                <Button
-                  type="button"
-                  onClick={analizar}
-                  disabled={loading}
-                  className="h-11 w-full sm:w-auto"
-                >
-                  {analizando && (
-                    <LoaderCircle
-                      data-icon="inline-start"
-                      className="animate-spin"
-                    />
-                  )}
-                  {analizando
-                    ? "Analizando proyecto..."
-                    : "Generar propuesta con IA"}
-                </Button>
+            <Button
+              type="submit"
+              disabled={loading}
+              className="h-11 w-full sm:w-auto sm:self-start"
+            >
+              {loading && (
+                <LoaderCircle
+                  data-icon="inline-start"
+                  className="animate-spin"
+                />
               )}
-            </div>
-            {analizando && (
+              {loading ? "Analizando proyecto..." : "Generar propuesta con IA"}
+            </Button>
+            {loading && (
               <p role="status" className="text-sm text-muted-foreground">
-                Estamos analizando tu solicitud. Puede tardar unos segundos.
+                Estamos validando y analizando tu solicitud. Puede tardar unos
+                segundos.
               </p>
             )}
           </form>
@@ -183,20 +152,14 @@ export function SolicitudForm() {
         </div>
       )}
       {propuesta && !revisando && (
-        <Card className="max-w-3xl">
-          <CardHeader>
-            <CardTitle>Propuesta preparada</CardTitle>
-            <CardDescription>
-              Revisa las sugerencias, configura tu presupuesto y aprueba el PDF
-              final.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <Button type="button" onClick={() => setRevisando(true)}>
-              Iniciar revisión guiada
-            </Button>
-          </CardContent>
-        </Card>
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => setRevisando(true)}
+          className="w-fit"
+        >
+          Retomar revisión
+        </Button>
       )}
       {propuesta && (
         <PresupuestoWizard
