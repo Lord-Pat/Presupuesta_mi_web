@@ -19,6 +19,12 @@ function errorRespuesta() {
 // La inyección del cliente permite probar el flujo sin llamadas reales ni créditos.
 function crearServicioOpenAI({ client, env = process.env } = {}) {
   return async function generarPropuesta(solicitud) {
+    // Diagnóstico temporal: nunca registrar el contenido de OPENAI_API_KEY.
+    console.info({
+      OPENAI_API_KEY: Boolean(process.env.OPENAI_API_KEY?.trim()),
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      OPENAI_MODEL: process.env.OPENAI_MODEL
+    });
     if (!env.OPENAI_API_KEY?.trim()) {
       throw new ErrorPropuesta(503, "IA_NO_CONFIGURADA", "El servicio de IA no está configurado en el servidor.");
     }
